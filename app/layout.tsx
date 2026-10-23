@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { RegisterSW } from "@/components/pwa/RegisterSW";
 import { NoZoom } from "@/components/pwa/NoZoom";
+import { AlertHost } from "@/components/ui/Alert";
+import { ToastHost } from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,8 +20,11 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#f6efe7",
-  colorScheme: "light",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4ede5" },
+    { media: "(prefers-color-scheme: dark)", color: "#100b08" },
+  ],
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +33,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="backdrop" aria-hidden />
         {children}
+        <AlertHost />
+        <ToastHost />
         <RegisterSW />
         <NoZoom />
       </body>

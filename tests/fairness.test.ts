@@ -61,7 +61,7 @@ describe("ledger", () => {
         session({ present: ["a", "c"], payerId: "c", drivers: ["a"] }),
         session({ present: ["b", "d"], payerId: "d", drivers: ["b", "d"] }),
       ],
-      { extraValue: 1.5, carBonus: 2, fairness: "media" },
+      { ...S, extraValue: 1.5, carBonus: 2 },
     );
     expect(sum(Object.values(book).map((x) => x.balance))).toBeCloseTo(0, 10);
   });

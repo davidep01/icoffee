@@ -4,7 +4,7 @@
  * - asset statici: cache-first
  * - pagine: network-first con copia in cache
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC = `static-${VERSION}`;
 const PAGES = `pages-${VERSION}`;
 const SHELL = ["/", "/storico/", "/saldi/", "/impostazioni/", "/setup/"];

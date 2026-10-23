@@ -1,27 +1,33 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CakeSlice, Car, Check, ChevronLeft, Dices, Plus, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CakeSlice, Car, Check, ChevronLeft, Coffee, Dices, Plus, Undo2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
+import { fireConfetti } from "@/components/Confetti";
+import { FriendSheet } from "@/components/FriendSheet";
 import { ResultCard } from "@/components/ResultCard";
 import { Wheel } from "@/components/Wheel";
+import { BottomBar } from "@/components/ui/BottomBar";
 import { Button } from "@/components/ui/Button";
-import { Glass, SectionHeader } from "@/components/ui/Glass";
-import { Toggle } from "@/components/ui/Toggle";
+import { ContentUnavailable } from "@/components/ui/ContentUnavailable";
+import { IconToggle } from "@/components/ui/IconToggle";
+import { ListRow, ListSection } from "@/components/ui/List";
 import { todayOdds, type Odds } from "@/lib/fairness";
-import { percent, sameDay, signed } from "@/lib/format";
+import { chime, haptic, setFeedbackEnabled, tick, unlockAudio } from "@/lib/feedback";
+import { clock, percent, sameDay, signed } from "@/lib/format";
+import { useTween } from "@/lib/hooks";
 import { toggleId } from "@/lib/list";
 import { pickWeighted, secureRandom } from "@/lib/random";
 import { actions } from "@/lib/store";
-import type { State, Today } from "@/lib/types";
+import type { Friend, State, Today } from "@/lib/types";
 import { layoutSlices, targetRotation, type Slice } from "@/lib/wheel";
 
 const todayLabel = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
 export default function OggiPage() {
   return (
-    <AppShell title="Chi paga oggi?" subtitle={todayLabel.format(new Date())}>
+    <AppShell title="Oggi" subtitle={todayLabel.format(new Date())}>
       {(state) => <Oggi state={state} />}
     </AppShell>
   );
@@ -32,6 +38,7 @@ type Mode = "home" | "presenti" | "ruota";
 interface Spin {
   slices: Slice[];
   sessionId: string;
+  winnerId: string;
   done: boolean;
 }
 
@@ -51,14 +58,24 @@ function Oggi({ state }: { state: State }) {
   const [spin, setSpin] = useState<Spin | null>(null);
   const [rotation, setRotation] = useState(0);
 
+  useEffect(() => {
+    setFeedbackEnabled(state.settings.sound);
+  }, [state.settings.sound]);
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [mode]);
+
   const odds = useMemo(() => todayOdds(state.sessions, today, state.settings), [state.sessions, today, state.settings]);
   const liveSlices = useMemo(
     () => layoutSlices(odds.map((o) => ({ id: o.id, label: byId.get(o.id)?.name ?? "?", color: byId.get(o.id)?.color ?? "#999", p: o.p }))),
     [odds, byId],
   );
   const spinSession = spin && state.sessions.find((s) => s.id === spin.sessionId);
+  const winner = spin?.done ? byId.get(spin.winnerId) : undefined;
 
-  const go = () => {
+  const go = (base: number) => {
+    unlockAudio();
+    haptic();
     const i = pickWeighted(odds.map((o) => o.p));
     // L'estrazione si salva subito: chiudere l'app a metà giro non la annulla
     const sessionId = actions.addSession({
@@ -67,43 +84,57 @@ function Oggi({ state }: { state: State }) {
       payerId: odds[i].id,
       odds: Object.fromEntries(odds.map((o) => [o.id, o.p])),
     });
-    setSpin({ slices: liveSlices, sessionId, done: false });
-    setRotation((r) => targetRotation(liveSlices[i], r, secureRandom));
+    setSpin({ slices: liveSlices, sessionId, winnerId: odds[i].id, done: false });
+    setRotation(targetRotation(liveSlices[i], base, secureRandom));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const onSpinEnd = useCallback(() => {
-    setSpin((s) => (s && !s.done ? { ...s, done: true } : s));
-    navigator.vibrate?.([30, 60, 90]);
-  }, [setSpin]);
+  const onSpinEnd = () => {
+    if (!spin || spin.done) return;
+    setSpin({ ...spin, done: true });
+    chime();
+    haptic("success");
+    fireConfetti([byId.get(spin.winnerId)?.color ?? "#8a4a1f", "#d0844f", "#f1c9a2", "#ffd60a", "#ffffff"]);
+  };
 
-  const finish = () => {
+  const newDraw = () => {
+    // Stessi presenti, ma macchina ed extra si risegnano
+    setToday((t) => ({ ...t, drivers: [], extras: [] }));
     setSpin(null);
-    setMode("home");
+    setMode("presenti");
   };
 
   // ---------------------------------------------------------------- home
   if (mode === "home") {
+    const [latest, ...earlier] = todaySessions;
     return (
-      <div className="flex flex-col gap-4">
-        {todaySessions.map((s) => (
-          <ResultCard key={s.id} session={s} state={state} />
-        ))}
-        {todaySessions.length === 0 && (
-          <Glass className="rounded-[28px] p-5 text-center text-label-2">Nessuna estrazione oggi.</Glass>
+      <>
+        {latest ? (
+          <ResultCard key={latest.id} session={latest} state={state} />
+        ) : (
+          <ContentUnavailable icon={Coffee} title="Nessuna estrazione oggi" description="Gira la ruota per scoprire chi offre." />
         )}
-        <Button
-          size="lg"
-          variant={todaySessions.length ? "tinted" : "filled"}
-          icon={Dices}
-          onClick={() => {
-            // Stessi presenti, ma macchina ed extra si risegnano
-            setToday((t) => ({ ...t, drivers: [], extras: [] }));
-            setMode("presenti");
-          }}
-        >
-          Nuova estrazione
-        </Button>
-      </div>
+        {earlier.length > 0 && (
+          <ListSection header="Prima, oggi">
+            {earlier.map((s) => {
+              const p = byId.get(s.payerId);
+              return p ? (
+                <ListRow
+                  key={s.id}
+                  leading={<Avatar friend={p} size={30} />}
+                  title={p.name}
+                  trailing={<span className="text-subhead text-label-2">{clock(s.date)}</span>}
+                />
+              ) : null;
+            })}
+          </ListSection>
+        )}
+        <BottomBar>
+          <Button size="lg" className="w-full" icon={Dices} onClick={newDraw}>
+            Nuova estrazione
+          </Button>
+        </BottomBar>
+      </>
     );
   }
 
@@ -129,44 +160,80 @@ function Oggi({ state }: { state: State }) {
   // ---------------------------------------------------------------- ruota
   const spinning = !!spin && !spin.done;
   return (
-    <div className="flex flex-col gap-4">
-      {!spin && (
-        <button onClick={() => setMode("presenti")} className="-mt-1 inline-flex items-center gap-1 self-start text-subhead font-semibold text-accent">
-          <ChevronLeft className="size-4" strokeWidth={2.6} /> {today.present.length} presenti
-        </button>
-      )}
+    <>
+      {!spin && <BackButton onClick={() => setMode("presenti")}>Chi c&apos;è</BackButton>}
 
-      <div className="py-2">
-        <Wheel slices={spin ? spin.slices : liveSlices} rotation={rotation} spinning={spinning} onSpinEnd={onSpinEnd} />
+      <div
+        onPointerDown={unlockAudio}
+        className={`mx-auto w-full pt-5 transition-[max-width] duration-700 ease-[cubic-bezier(0.2,0.9,0.3,1)] ${spin?.done ? "max-w-[200px]" : "max-w-[340px]"}`}
+      >
+        <Wheel
+          slices={spin ? spin.slices : liveSlices}
+          rotation={rotation}
+          spinning={spinning}
+          interactive={!spin}
+          winner={winner}
+          onSpinEnd={onSpinEnd}
+          onTick={() => {
+            tick();
+            haptic();
+          }}
+          onDragEnd={(r, fling) => (fling ? go(r) : setRotation(r))}
+        />
       </div>
 
       {!spin && (
         <>
-          <Button size="lg" icon={Dices} onClick={go}>
-            Gira la ruota
-          </Button>
-          <OddsList odds={odds} state={state} today={today} setToday={setToday} />
+          <p className="mt-5 text-center text-footnote text-label-2">Trascina la ruota in senso orario, o premi Gira</p>
+          <OddsSection odds={odds} byId={byId} today={today} setToday={setToday} />
+          <BottomBar>
+            <Button size="lg" className="w-full" icon={Dices} onClick={() => go(rotation)}>
+              Gira la ruota
+            </Button>
+          </BottomBar>
         </>
       )}
 
-      {spinning && <p className="text-center text-headline text-label-2">Gira, gira…</p>}
+      {spinning && (
+        <p className="mt-8 animate-pulse text-center text-title-3 text-label-2" aria-live="polite">
+          Gira, gira…
+        </p>
+      )}
 
       {spin?.done && spinSession && (
-        <ResultCard session={spinSession} state={state} fresh>
-          <Button size="sm" icon={Check} className="ml-auto" onClick={finish}>
-            Fatto
-          </Button>
-        </ResultCard>
+        <>
+          <div className="mt-6">
+            <ResultCard session={spinSession} state={state} fresh />
+          </div>
+          <BottomBar>
+            <Button size="lg" className="w-full" icon={Check} onClick={() => setMode("home")}>
+              Fatto
+            </Button>
+          </BottomBar>
+        </>
       )}
       {spin?.done && !spinSession && (
-        <Glass className="flex flex-col items-center gap-3 rounded-[28px] p-5 text-center">
-          <span className="text-headline">Estrazione annullata</span>
-          <Button icon={Dices} onClick={() => setSpin(null)}>
-            Rigira
-          </Button>
-        </Glass>
+        <ContentUnavailable
+          icon={Undo2}
+          title="Estrazione annullata"
+          description="Non conta nei saldi."
+          action={
+            <Button icon={Dices} onClick={() => setSpin(null)}>
+              Gira di nuovo
+            </Button>
+          }
+        />
       )}
-    </div>
+    </>
+  );
+}
+
+function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className="-ml-2 -mt-1 inline-flex h-11 items-center pr-3 text-body text-accent">
+      <ChevronLeft className="size-[26px]" strokeWidth={2.4} aria-hidden />
+      {children}
+    </button>
   );
 }
 
@@ -183,147 +250,153 @@ function Presence({
   onNext: () => void;
   onBack?: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
   const active = state.friends.filter((f) => f.active);
-
-  const add = () => {
-    const n = name.trim();
-    if (!n) return;
-    actions.addFriend(n);
-    setName("");
-  };
+  const all = present.length === active.length;
 
   return (
-    <div className="flex flex-col gap-3">
-      {onBack && (
-        <button onClick={onBack} className="-mt-1 inline-flex items-center gap-1 self-start text-subhead font-semibold text-accent">
-          <ChevronLeft className="size-4" strokeWidth={2.6} /> Oggi
+    <>
+      {onBack && <BackButton onClick={onBack}>Oggi</BackButton>}
+      <div className="flex items-end justify-between gap-3 px-1 pb-5 pt-2">
+        <div>
+          <h2 className="text-title-2">Chi c&apos;è oggi?</h2>
+          <p className="text-subhead text-label-2">
+            {present.length} di {active.length} · tocca per cambiare
+          </p>
+        </div>
+        <button
+          className="h-11 px-1 text-body text-accent"
+          onClick={() => {
+            haptic();
+            onChange(all ? [] : active.map((f) => f.id));
+          }}
+        >
+          {all ? "Nessuno" : "Tutti"}
         </button>
-      )}
-      <SectionHeader
-        action={
-          <button
-            className="text-subhead font-semibold text-accent"
-            onClick={() => onChange(present.length === active.length ? [] : active.map((f) => f.id))}
-          >
-            {present.length === active.length ? "Nessuno" : "Tutti"}
-          </button>
-        }
-      >
-        Chi c&apos;è oggi?
-      </SectionHeader>
-
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {active.map((f) => {
-          const on = present.includes(f.id);
-          return (
-            <button
-              key={f.id}
-              aria-pressed={on}
-              onClick={() => onChange(toggleId(present, f.id, !on))}
-              className={`glass-button flex items-center gap-2.5 rounded-2xl p-3 text-left ${on ? "glass glass-strong" : "bg-fill opacity-60"}`}
-            >
-              <Avatar friend={f} size={34} />
-              <span className="min-w-0 flex-1 truncate text-headline">{f.name}</span>
-              <span
-                className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent text-on-accent" : "border-2 border-label-3"}`}
-              >
-                {on && <Check className="size-4" strokeWidth={3} />}
-              </span>
-            </button>
-          );
-        })}
       </div>
 
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <label className="flex h-11 flex-1 items-center gap-2 rounded-full bg-fill px-4">
-          <UserPlus className="size-4 text-label-3" aria-hidden />
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={40}
-            placeholder="Si aggiunge qualcuno?"
-            className="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-label-3"
+      <div className="stagger grid grid-cols-3 gap-x-3 gap-y-6 sm:grid-cols-4">
+        {active.map((f) => (
+          <PersonBubble
+            key={f.id}
+            friend={f}
+            on={present.includes(f.id)}
+            onToggle={(on) => {
+              haptic();
+              onChange(toggleId(present, f.id, on));
+            }}
           />
-        </label>
-        <Button type="submit" variant="tinted" icon={Plus} disabled={!name.trim()}>
-          Aggiungi
-        </Button>
-      </form>
+        ))}
+        <button onClick={() => setAdding(true)} className="glass-button flex flex-col items-center gap-2">
+          <span className="flex size-[74px] items-center justify-center rounded-full border-2 border-dashed border-label-3 text-label-2">
+            <Plus className="size-7" strokeWidth={2} aria-hidden />
+          </span>
+          <span className="text-subhead font-semibold text-label-2">Aggiungi</span>
+        </button>
+      </div>
 
-      <Button size="lg" className="mt-3" disabled={present.length < 2} onClick={onNext}>
-        {present.length < 2 ? "Servono almeno 2 persone" : `Avanti · ${present.length} presenti`}
-      </Button>
-    </div>
+      {adding && <FriendSheet state={state} onClose={() => setAdding(false)} onAdded={(id) => onChange([...present, id])} />}
+
+      <BottomBar>
+        <Button size="lg" className="w-full" disabled={present.length < 2} onClick={onNext}>
+          {present.length < 2 ? "Scegli almeno 2 persone" : `Continua con ${present.length}`}
+        </Button>
+      </BottomBar>
+    </>
   );
 }
 
-function OddsList({
+function PersonBubble({ friend, on, onToggle }: { friend: Friend; on: boolean; onToggle: (on: boolean) => void }) {
+  return (
+    <button aria-pressed={on} onClick={() => onToggle(!on)} className="glass-button flex min-w-0 flex-col items-center gap-2">
+      <span className="relative">
+        <span className={`block rounded-full p-[3px] transition-shadow duration-200 ${on ? "shadow-[0_0_0_2.5px_var(--accent)]" : ""}`}>
+          <Avatar friend={friend} size={68} className={`transition-[opacity,filter] duration-200 ${on ? "" : "opacity-35 grayscale"}`} />
+        </span>
+        <span
+          className="absolute bottom-0 right-0 flex size-6 items-center justify-center rounded-full bg-accent text-on-accent ring-[2.5px] ring-[var(--bg)] transition-[transform,opacity] duration-300"
+          style={{ transform: on ? "scale(1)" : "scale(0.4)", opacity: on ? 1 : 0, transitionTimingFunction: "cubic-bezier(0.3, 1.6, 0.5, 1)" }}
+          aria-hidden
+        >
+          <Check className="size-3.5" strokeWidth={3.4} />
+        </span>
+      </span>
+      <span className={`max-w-full truncate text-subhead font-semibold transition-colors ${on ? "text-label" : "text-label-3"}`}>{friend.name}</span>
+    </button>
+  );
+}
+
+function OddsSection({
   odds,
-  state,
+  byId,
   today,
   setToday,
 }: {
   odds: Odds[];
-  state: State;
+  byId: Map<string, Friend>;
   today: Today;
   setToday: React.Dispatch<React.SetStateAction<Today>>;
 }) {
-  const byId = new Map(state.friends.map((f) => [f.id, f]));
   const max = Math.max(...odds.map((o) => o.p));
-
   return (
-    <section>
-      <SectionHeader>Probabilità</SectionHeader>
-      <p className="-mt-1 px-1 pb-3 text-footnote text-label-2">
-        Segna chi ha portato la macchina e chi prende un extra: le percentuali si aggiornano subito.
-      </p>
-      <ul className="flex flex-col gap-2">
-        {odds.map((o) => {
-          const f = byId.get(o.id);
-          if (!f) return null;
-          const parts = [`saldo ${signed(o.balance)}`];
-          if (o.extra) parts.push(`extra ${signed(o.extra)}`);
-          if (o.car) parts.push(`${o.car < 0 ? "macchina" : "passaggio"} ${signed(o.car)}`);
-          return (
-            <li key={o.id}>
-              <Glass className="rounded-2xl p-3">
-                <div className="flex items-center gap-2.5">
-                  <Avatar friend={f} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-headline">{f.name}</div>
-                    <div className="truncate text-caption text-label-2">{parts.join(" · ")}</div>
-                  </div>
-                  <span className="text-title-3 tabular-nums">{percent(o.p)}</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-fill">
-                  <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${(o.p / max) * 100}%`, background: f.color }} />
-                </div>
-                <div className="mt-2.5 flex gap-1.5">
-                  <Toggle
-                    on={today.drivers.includes(o.id)}
-                    onChange={(on) => setToday((t) => ({ ...t, drivers: toggleId(t.drivers, o.id, on) }))}
-                    icon={Car}
-                    label="Macchina"
-                  />
-                  <Toggle
-                    on={today.extras.includes(o.id)}
-                    onChange={(on) => setToday((t) => ({ ...t, extras: toggleId(t.extras, o.id, on) }))}
-                    icon={CakeSlice}
-                    label="Extra"
-                  />
-                </div>
-              </Glass>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <ListSection
+      header="Probabilità di oggi"
+      footer={
+        <>
+          <Car className="inline size-3.5 -translate-y-px text-blue" aria-hidden /> chi ha portato la macchina,{" "}
+          <CakeSlice className="inline size-3.5 -translate-y-px text-orange" aria-hidden /> chi prende un extra. Il saldo è caffè bevuti meno caffè pagati.
+        </>
+      }
+    >
+      {odds.map((o) => {
+        const f = byId.get(o.id);
+        if (!f) return null;
+        // Saldo fino a ieri e, se oggi macchina o extra lo spostano, dove arriva
+        const adjusted = o.extra || o.car ? ` → ${signed(o.score)}` : "";
+        return (
+          <ListRow
+            key={o.id}
+            leading={<Avatar friend={f} size={36} />}
+            title={<span className="font-semibold">{f.name}</span>}
+            subtitle={`Saldo ${signed(o.balance)}${adjusted}`}
+            inset={64}
+            trailing={
+              <div className="flex items-center gap-1.5">
+                <IconToggle
+                  tone="blue"
+                  icon={Car}
+                  label={`${f.name} ha la macchina`}
+                  on={today.drivers.includes(o.id)}
+                  onChange={(on) => {
+                    haptic();
+                    setToday((t) => ({ ...t, drivers: toggleId(t.drivers, o.id, on) }));
+                  }}
+                />
+                <IconToggle
+                  tone="orange"
+                  icon={CakeSlice}
+                  label={`${f.name} prende un extra`}
+                  on={today.extras.includes(o.id)}
+                  onChange={(on) => {
+                    haptic();
+                    setToday((t) => ({ ...t, extras: toggleId(t.extras, o.id, on) }));
+                  }}
+                />
+                <Percent p={o.p} />
+              </div>
+            }
+          >
+            <div className="-mt-1.5 mb-2.5 ml-[64px] mr-4 h-[3px] overflow-hidden rounded-full bg-fill" aria-hidden>
+              <div className="h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${(o.p / max) * 100}%`, background: f.color }} />
+            </div>
+          </ListRow>
+        );
+      })}
+    </ListSection>
   );
+}
+
+function Percent({ p }: { p: number }) {
+  const shown = useTween(p);
+  return <span className="font-rounded w-[52px] text-right text-title-3 font-semibold">{percent(shown)}</span>;
 }

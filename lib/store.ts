@@ -12,10 +12,13 @@ import type { Friend, Session, Settings, State } from "./types";
  */
 const KEY = "ipagato:v1";
 
-/** Colori degli spicchi: ben distinguibili e leggibili con testo bianco. */
+/**
+ * Colori degli spicchi: le varianti ad alto contrasto dei colori di sistema
+ * Apple, leggibili con testo bianco in tema chiaro e scuro.
+ */
 export const COLORS = [
-  "#b45309", "#0f766e", "#7c3aed", "#be123c", "#1d4ed8", "#4d7c0f",
-  "#a21caf", "#0e7490", "#c2410c", "#15803d", "#6d28d9", "#9f1239",
+  "#C93400", "#0071A4", "#8944AB", "#D30F45", "#0040DD", "#248A3D",
+  "#B25000", "#3634A3", "#0C817B", "#7F6545", "#AD3A90", "#536878",
 ];
 
 const id = z.string().min(1);
@@ -39,6 +42,7 @@ export const stateSchema = z.object({
     extraValue: z.number().min(0).max(10),
     carBonus: z.number().min(0).max(10),
     fairness: z.enum(["fortuna", "bassa", "media", "alta"]),
+    sound: z.boolean().default(true),
   }),
 });
 
@@ -104,8 +108,10 @@ export const actions = {
     write({ ...EMPTY, friends, settings });
   },
 
-  addFriend(name: string) {
-    update((s) => ({ ...s, friends: [...s.friends, { id: uid(), name, color: nextColor(s.friends), active: true }] }));
+  addFriend(name: string): string {
+    const friendId = uid();
+    update((s) => ({ ...s, friends: [...s.friends, { id: friendId, name, color: nextColor(s.friends), active: true }] }));
+    return friendId;
   },
 
   updateFriend(friendId: string, patch: Partial<Pick<Friend, "name" | "active">>) {
@@ -137,6 +143,11 @@ export const actions = {
 
   deleteSession(sessionId: string) {
     update((s) => ({ ...s, sessions: s.sessions.filter((x) => x.id !== sessionId) }));
+  },
+
+  /** Per l'"Annulla" dopo un'eliminazione. */
+  restoreSession(session: Session) {
+    update((s) => (s.sessions.some((x) => x.id === session.id) ? s : { ...s, sessions: [...s.sessions, session] }));
   },
 
   /** Lancia un errore se il file non è un backup valido. */

@@ -30,10 +30,10 @@ export function AppShell({
 
   return (
     <>
-      <main className="pt-safe mx-auto max-w-xl px-4 pb-36">
+      <main className="pt-safe mx-auto max-w-xl px-4" style={{ paddingBottom: "calc(max(env(safe-area-inset-bottom), 14px) + 160px)" }}>
         <LargeTitle title={title} subtitle={subtitle} trailing={trailing} />
         {ready ? (
-          children(state)
+          <div className="animate-rise">{children(state)}</div>
         ) : (
           <div className="flex h-[50dvh] items-center justify-center text-label-3">
             <Coffee className="size-10 animate-pulse" />

@@ -1,6 +1,7 @@
 import { Minus, Plus } from "lucide-react";
 import { decimal } from "@/lib/format";
 
+/** UIStepper: valore a sinistra, capsula − | + a destra. */
 export function Stepper({
   value,
   onChange,
@@ -15,21 +16,24 @@ export function Stepper({
   min?: number;
   max?: number;
   step?: number;
-  unit: (v: number) => string;
+  unit: string;
   label: string;
 }) {
-  const btn = "glass-button flex size-9 items-center justify-center rounded-full bg-fill text-label disabled:opacity-35";
+  const btn = "flex h-8 w-[46px] items-center justify-center text-label transition-colors active:bg-pressed disabled:text-label-3";
   return (
-    <div className="flex items-center gap-2" role="group" aria-label={label}>
-      <button type="button" className={btn} aria-label="Meno" disabled={value <= min} onClick={() => onChange(Math.max(min, value - step))}>
-        <Minus className="size-4" strokeWidth={2.4} />
-      </button>
-      <span className="min-w-[78px] text-center text-subhead font-semibold tabular-nums">
-        {decimal(value)} {unit(value)}
+    <div className="flex shrink-0 items-center gap-3" role="group" aria-label={label}>
+      <span className="font-rounded text-body text-label-2" aria-live="polite">
+        {decimal(value)} {unit}
       </span>
-      <button type="button" className={btn} aria-label="Più" disabled={value >= max} onClick={() => onChange(Math.min(max, value + step))}>
-        <Plus className="size-4" strokeWidth={2.4} />
-      </button>
+      <div className="flex items-center overflow-hidden rounded-[9px] bg-fill">
+        <button type="button" className={btn} aria-label={`${label}: meno`} disabled={value <= min} onClick={() => onChange(Math.max(min, value - step))}>
+          <Minus className="size-[18px]" strokeWidth={2.4} />
+        </button>
+        <span className="h-[18px] w-px bg-separator" aria-hidden />
+        <button type="button" className={btn} aria-label={`${label}: più`} disabled={value >= max} onClick={() => onChange(Math.min(max, value + step))}>
+          <Plus className="size-[18px]" strokeWidth={2.4} />
+        </button>
+      </div>
     </div>
   );
 }

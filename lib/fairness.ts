@@ -22,7 +22,7 @@ export const BETA: Record<Fairness, number> = {
   alta: 1.5,
 };
 
-export const DEFAULT_SETTINGS: Settings = { extraValue: 1, carBonus: 1, fairness: "media" };
+export const DEFAULT_SETTINGS: Settings = { extraValue: 1, carBonus: 1, fairness: "media", sound: true };
 
 export interface Stats {
   presences: number;

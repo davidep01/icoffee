@@ -8,6 +8,17 @@ Chi offre il caffè oggi? Una ruota che gira a caso, ma **truccata verso l'equit
 - **Saldi**: presenze, volte pagato, caffè offerti, extra, macchina, saldo.
 - **Regole**: amici, parametri dell'algoritmo, backup JSON.
 
+### Interfaccia
+
+Pensata come un'app iOS (Human Interface Guidelines, Liquid Glass):
+- **tema chiaro e scuro** automatici, numeri in SF Pro Rounded, colori di sistema Apple ad alto contrasto;
+- **ruota** con pioli che ticchettano (suono + vibrazione, disattivabili), si lancia anche **trascinandola col dito**; all'arrivo coriandoli e chicchi di caffè, lo spicchio vincente resta acceso;
+- pulsante principale sempre **a portata di pollice** sopra la tab bar;
+- liste raggruppate come Impostazioni, interruttori iOS, **fogli che si chiudono trascinandoli giù**;
+- niente popup del browser: alert iOS per le azioni irreversibili, **toast con "Annulla"** per le eliminazioni;
+- nello Storico **scorri a sinistra per eliminare**; **Condividi** il risultato nel gruppo WhatsApp;
+- rispetta "Riduci movimento" e "Riduci trasparenza".
+
 I dati restano **solo su questo telefono** (localStorage). Per cambiare telefono: Regole → Esporta / Importa.
 
 ## L'algoritmo (`lib/fairness.ts`)

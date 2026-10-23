@@ -21,8 +21,10 @@ export function percent(p: number): string {
 const day = new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "numeric", month: "short" });
 const time = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" });
 
+/** "Ven 23 ott": solo la prima lettera maiuscola, come in italiano. */
 export function shortDate(iso: string): string {
-  return day.format(new Date(iso));
+  const s = day.format(new Date(iso));
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function clock(iso: string): string {

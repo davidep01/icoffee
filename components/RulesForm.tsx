@@ -1,6 +1,7 @@
 "use client";
 
 import { CakeSlice, Car, Scale } from "lucide-react";
+import { IconTile, ListRow, ListSection } from "@/components/ui/List";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Stepper } from "@/components/ui/Stepper";
 import { BETA } from "@/lib/fairness";
@@ -14,49 +15,46 @@ const FAIRNESS: { value: Fairness; label: string; hint: string }[] = [
   { value: "alta", label: "Alta", hint: "Quasi a turno: chi è in debito esce quasi sempre." },
 ];
 
-const coffees = () => "caffè";
-
-/** Le regole dell'algoritmo, usate nel wizard e nelle impostazioni. */
+/** Le regole dell'algoritmo, nel wizard e in Regole. */
 export function RulesForm({ settings, onChange }: { settings: Settings; onChange: (patch: Partial<Settings>) => void }) {
   const current = FAIRNESS.find((f) => f.value === settings.fairness)!;
-  const row = "flex flex-col gap-3 rounded-2xl bg-fill p-4";
+  const factor = Math.exp(BETA[settings.fairness]);
+
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className={row}>
-        <div className="flex items-start gap-3">
-          <CakeSlice className="mt-0.5 size-5 shrink-0 text-accent" />
-          <div>
-            <div className="text-headline">Valore di un extra</div>
-            <p className="text-footnote text-label-2">Dolce, amaro, cornetto… quanto pesa rispetto a un caffè.</p>
-          </div>
-        </div>
-        <Stepper label="Valore extra" value={settings.extraValue} onChange={(extraValue) => onChange({ extraValue })} unit={coffees} />
-      </div>
+    <>
+      <ListSection header="Pesi" footer="L'extra pesa su chi lo prende. Il credito della macchina lo pagano i passeggeri.">
+        <ListRow
+          leading={<IconTile icon={CakeSlice} color="#FF9500" />}
+          title="Extra"
+          trailing={<Stepper label="Valore di un extra" unit="caffè" value={settings.extraValue} onChange={(extraValue) => onChange({ extraValue })} />}
+        />
+        <ListRow
+          leading={<IconTile icon={Car} color="#007AFF" />}
+          title="Macchina"
+          trailing={<Stepper label="Bonus macchina" unit="caffè" value={settings.carBonus} onChange={(carBonus) => onChange({ carBonus })} />}
+        />
+      </ListSection>
 
-      <div className={row}>
-        <div className="flex items-start gap-3">
-          <Car className="mt-0.5 size-5 shrink-0 text-accent" />
-          <div>
-            <div className="text-headline">Bonus macchina</div>
-            <p className="text-footnote text-label-2">Credito per chi guida, pagato dai passeggeri.</p>
+      <ListSection
+        header="Equità"
+        footer={
+          <>
+            {current.hint}
+            {factor > 1 && (
+              <>
+                {" "}
+                Ogni caffè di debito moltiplica la probabilità per <b className="font-rounded text-label">×{decimal(Math.round(factor * 10) / 10)}</b>.
+              </>
+            )}
+          </>
+        }
+      >
+        <ListRow leading={<IconTile icon={Scale} color="#8A4A1F" />} title="Quanto conta lo storico">
+          <div className="px-4 pb-4">
+            <SegmentedControl label="Equità" value={settings.fairness} onChange={(fairness) => onChange({ fairness })} options={FAIRNESS} />
           </div>
-        </div>
-        <Stepper label="Bonus macchina" value={settings.carBonus} onChange={(carBonus) => onChange({ carBonus })} unit={coffees} />
-      </div>
-
-      <div className={row}>
-        <div className="flex items-start gap-3">
-          <Scale className="mt-0.5 size-5 shrink-0 text-accent" />
-          <div>
-            <div className="text-headline">Equità</div>
-            <p className="text-footnote text-label-2">
-              {current.hint}
-              {BETA[settings.fairness] > 0 && ` Ogni caffè di debito: probabilità ×${decimal(Math.round(Math.exp(BETA[settings.fairness]) * 10) / 10)}.`}
-            </p>
-          </div>
-        </div>
-        <SegmentedControl label="Equità" value={settings.fairness} onChange={(fairness) => onChange({ fairness })} options={FAIRNESS} />
-      </div>
-    </div>
+        </ListRow>
+      </ListSection>
+    </>
   );
 }

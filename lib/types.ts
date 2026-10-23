@@ -27,6 +27,8 @@ export interface Settings {
   /** Quanti caffè di credito guadagna chi porta la macchina. */
   carBonus: number;
   fairness: Fairness;
+  /** Tick, campanella e vibrazione durante la ruota. */
+  sound: boolean;
 }
 
 export interface State {
