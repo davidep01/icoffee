@@ -19,6 +19,8 @@ export interface Session {
   payerId: string;
   /** Probabilità di ognuno al momento dell'estrazione (solo per lo storico). */
   odds: Record<string, number>;
+  /** Pagamento registrato a mano, senza girare la ruota: niente probabilità. */
+  manual?: boolean;
 }
 
 export interface Settings {

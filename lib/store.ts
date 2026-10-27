@@ -36,6 +36,7 @@ export const stateSchema = z.object({
       extras: z.array(id),
       payerId: id,
       odds: z.record(z.string(), z.number()),
+      manual: z.boolean().optional(),
     }),
   ),
   settings: z.object({

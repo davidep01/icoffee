@@ -46,7 +46,8 @@ export function ToastHost() {
   return createPortal(
     <div
       className="pointer-events-none fixed inset-x-0 z-[75] flex justify-center px-4"
-      style={{ bottom: "calc(max(env(safe-area-inset-bottom), 14px) + 82px)" }}
+      // Sopra la tab bar e sopra l'eventuale pulsante principale
+      style={{ bottom: "calc(max(env(safe-area-inset-bottom), 14px) + 142px)" }}
       role="status"
       aria-live="polite"
     >

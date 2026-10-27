@@ -5,6 +5,7 @@ Chi offre il caffè oggi? Una ruota che gira a caso, ma **truccata verso l'equit
 - **Wizard** al primo avvio: nomi del gruppo e regole.
 - **Oggi**: chi c'è → chi ha la macchina / chi prende un extra → **gira la ruota**. Gli spicchi sono grandi quanto la probabilità di ognuno.
 - **Extra modificabili dopo** l'estrazione (dal risultato o dallo **Storico**, dove si corregge anche chi c'era e chi ha pagato).
+- **Pagamento a mano**: con il **+** in alto (Oggi e Storico) o "Ha già pagato qualcuno?" sotto la ruota si registra chi ha offerto senza girare, anche in una data passata. Conta nei saldi come un'estrazione; nello storico è segnato "a mano".
 - **Saldi**: presenze, volte pagato, caffè offerti, extra, macchina, saldo.
 - **Regole**: amici, parametri dell'algoritmo, backup JSON.
 

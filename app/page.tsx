@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CakeSlice, Car, Check, ChevronLeft, Coffee, Dices, Plus, Undo2 } from "lucide-react";
+import { CakeSlice, Car, Check, ChevronLeft, Coffee, Dices, PenLine, Plus, Undo2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { fireConfetti } from "@/components/Confetti";
 import { FriendSheet } from "@/components/FriendSheet";
 import { ResultCard } from "@/components/ResultCard";
+import { SessionSheet } from "@/components/SessionSheet";
 import { Wheel } from "@/components/Wheel";
 import { BottomBar } from "@/components/ui/BottomBar";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { ContentUnavailable } from "@/components/ui/ContentUnavailable";
 import { IconToggle } from "@/components/ui/IconToggle";
 import { ListRow, ListSection } from "@/components/ui/List";
@@ -26,9 +27,14 @@ import { layoutSlices, targetRotation, type Slice } from "@/lib/wheel";
 const todayLabel = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
 export default function OggiPage() {
+  const [manual, setManual] = useState(false);
   return (
-    <AppShell title="Oggi" subtitle={todayLabel.format(new Date())}>
-      {(state) => <Oggi state={state} />}
+    <AppShell
+      title="Oggi"
+      subtitle={todayLabel.format(new Date())}
+      trailing={<IconButton icon={Plus} label="Inserisci un pagamento a mano" onClick={() => setManual(true)} />}
+    >
+      {(state) => <Oggi state={state} manual={manual} setManual={setManual} />}
     </AppShell>
   );
 }
@@ -42,7 +48,7 @@ interface Spin {
   done: boolean;
 }
 
-function Oggi({ state }: { state: State }) {
+function Oggi({ state, manual, setManual }: { state: State; manual: boolean; setManual: (open: boolean) => void }) {
   const now = new Date();
   const todaySessions = state.sessions.filter((s) => sameDay(new Date(s.date), now)).sort((a, b) => b.date.localeCompare(a.date));
   const active = state.friends.filter((f) => f.active);
@@ -97,6 +103,20 @@ function Oggi({ state }: { state: State }) {
     fireConfetti([byId.get(spin.winnerId)?.color ?? "#8a4a1f", "#d0844f", "#f1c9a2", "#ffd60a", "#ffffff"]);
   };
 
+  // Pagamento a mano: parte da presenti, macchina ed extra già segnati oggi
+  const sheet = manual && (
+    <SessionSheet
+      state={state}
+      initial={today}
+      onClose={() => setManual(false)}
+      onSaved={(date) => {
+        if (!sameDay(date, new Date())) return;
+        setSpin(null);
+        setMode("home");
+      }}
+    />
+  );
+
   const newDraw = () => {
     // Stessi presenti, ma macchina ed extra si risegnano
     setToday((t) => ({ ...t, drivers: [], extras: [] }));
@@ -104,128 +124,145 @@ function Oggi({ state }: { state: State }) {
     setMode("presenti");
   };
 
-  // ---------------------------------------------------------------- home
-  if (mode === "home") {
-    const [latest, ...earlier] = todaySessions;
+  // Il foglio resta nello stesso punto dell'albero: cambiando schermata dopo il
+  // salvataggio non si rimonta (e non si riapre vuoto)
+  return (
+    <>
+      {renderMode()}
+      {sheet}
+    </>
+  );
+
+  function renderMode() {
+    // ---------------------------------------------------------------- home
+    if (mode === "home") {
+      const [latest, ...earlier] = todaySessions;
+      return (
+        <>
+          {latest ? (
+            <ResultCard key={latest.id} session={latest} state={state} />
+          ) : (
+            <ContentUnavailable icon={Coffee} title="Nessuna estrazione oggi" description="Gira la ruota per scoprire chi offre." />
+          )}
+          {earlier.length > 0 && (
+            <ListSection header="Prima, oggi">
+              {earlier.map((s) => {
+                const p = byId.get(s.payerId);
+                return p ? (
+                  <ListRow
+                    key={s.id}
+                    leading={<Avatar friend={p} size={30} />}
+                    title={p.name}
+                    trailing={<span className="text-subhead text-label-2">{clock(s.date)}</span>}
+                  />
+                ) : null;
+              })}
+            </ListSection>
+          )}
+          <BottomBar>
+            <Button size="lg" className="w-full" icon={Dices} onClick={newDraw}>
+              Nuova estrazione
+            </Button>
+          </BottomBar>
+        </>
+      );
+    }
+
+    // ---------------------------------------------------------------- presenti
+    if (mode === "presenti") {
+      return (
+        <Presence
+          state={state}
+          present={today.present}
+          onChange={(present) =>
+            setToday((t) => ({
+              present,
+              drivers: t.drivers.filter((id) => present.includes(id)),
+              extras: t.extras.filter((id) => present.includes(id)),
+            }))
+          }
+          onNext={() => setMode("ruota")}
+          onBack={todaySessions.length ? () => setMode("home") : undefined}
+        />
+      );
+    }
+
+    // ---------------------------------------------------------------- ruota
+    const spinning = !!spin && !spin.done;
     return (
       <>
-        {latest ? (
-          <ResultCard key={latest.id} session={latest} state={state} />
-        ) : (
-          <ContentUnavailable icon={Coffee} title="Nessuna estrazione oggi" description="Gira la ruota per scoprire chi offre." />
+        {!spin && <BackButton onClick={() => setMode("presenti")}>Chi c&apos;è</BackButton>}
+
+        <div
+          onPointerDown={unlockAudio}
+          className={`mx-auto w-full pt-5 transition-[max-width] duration-700 ease-[cubic-bezier(0.2,0.9,0.3,1)] ${spin?.done ? "max-w-[200px]" : "max-w-[340px]"}`}
+        >
+          <Wheel
+            slices={spin ? spin.slices : liveSlices}
+            rotation={rotation}
+            spinning={spinning}
+            interactive={!spin}
+            winner={winner}
+            onSpinEnd={onSpinEnd}
+            onTick={() => {
+              tick();
+              haptic();
+            }}
+            onDragEnd={(r, fling) => (fling ? go(r) : setRotation(r))}
+          />
+        </div>
+
+        {!spin && (
+          <>
+            <p className="mt-5 text-center text-footnote text-label-2">Trascina la ruota in senso orario, o premi Gira</p>
+            <button
+              onClick={() => setManual(true)}
+              className="mx-auto mt-1 inline-flex h-11 items-center gap-1.5 px-3 text-subhead text-accent"
+            >
+              <PenLine className="size-4" aria-hidden /> Ha già pagato qualcuno? Inseriscilo a mano
+            </button>
+            <OddsSection odds={odds} byId={byId} today={today} setToday={setToday} />
+            <BottomBar>
+              <Button size="lg" className="w-full" icon={Dices} onClick={() => go(rotation)}>
+                Gira la ruota
+              </Button>
+            </BottomBar>
+          </>
         )}
-        {earlier.length > 0 && (
-          <ListSection header="Prima, oggi">
-            {earlier.map((s) => {
-              const p = byId.get(s.payerId);
-              return p ? (
-                <ListRow
-                  key={s.id}
-                  leading={<Avatar friend={p} size={30} />}
-                  title={p.name}
-                  trailing={<span className="text-subhead text-label-2">{clock(s.date)}</span>}
-                />
-              ) : null;
-            })}
-          </ListSection>
+
+        {spinning && (
+          <p className="mt-8 animate-pulse text-center text-title-3 text-label-2" aria-live="polite">
+            Gira, gira…
+          </p>
         )}
-        <BottomBar>
-          <Button size="lg" className="w-full" icon={Dices} onClick={newDraw}>
-            Nuova estrazione
-          </Button>
-        </BottomBar>
+
+        {spin?.done && spinSession && (
+          <>
+            <div className="mt-6">
+              <ResultCard session={spinSession} state={state} fresh />
+            </div>
+            <BottomBar>
+              <Button size="lg" className="w-full" icon={Check} onClick={() => setMode("home")}>
+                Fatto
+              </Button>
+            </BottomBar>
+          </>
+        )}
+        {spin?.done && !spinSession && (
+          <ContentUnavailable
+            icon={Undo2}
+            title="Estrazione annullata"
+            description="Non conta nei saldi."
+            action={
+              <Button icon={Dices} onClick={() => setSpin(null)}>
+                Gira di nuovo
+              </Button>
+            }
+          />
+        )}
       </>
     );
   }
-
-  // ---------------------------------------------------------------- presenti
-  if (mode === "presenti") {
-    return (
-      <Presence
-        state={state}
-        present={today.present}
-        onChange={(present) =>
-          setToday((t) => ({
-            present,
-            drivers: t.drivers.filter((id) => present.includes(id)),
-            extras: t.extras.filter((id) => present.includes(id)),
-          }))
-        }
-        onNext={() => setMode("ruota")}
-        onBack={todaySessions.length ? () => setMode("home") : undefined}
-      />
-    );
-  }
-
-  // ---------------------------------------------------------------- ruota
-  const spinning = !!spin && !spin.done;
-  return (
-    <>
-      {!spin && <BackButton onClick={() => setMode("presenti")}>Chi c&apos;è</BackButton>}
-
-      <div
-        onPointerDown={unlockAudio}
-        className={`mx-auto w-full pt-5 transition-[max-width] duration-700 ease-[cubic-bezier(0.2,0.9,0.3,1)] ${spin?.done ? "max-w-[200px]" : "max-w-[340px]"}`}
-      >
-        <Wheel
-          slices={spin ? spin.slices : liveSlices}
-          rotation={rotation}
-          spinning={spinning}
-          interactive={!spin}
-          winner={winner}
-          onSpinEnd={onSpinEnd}
-          onTick={() => {
-            tick();
-            haptic();
-          }}
-          onDragEnd={(r, fling) => (fling ? go(r) : setRotation(r))}
-        />
-      </div>
-
-      {!spin && (
-        <>
-          <p className="mt-5 text-center text-footnote text-label-2">Trascina la ruota in senso orario, o premi Gira</p>
-          <OddsSection odds={odds} byId={byId} today={today} setToday={setToday} />
-          <BottomBar>
-            <Button size="lg" className="w-full" icon={Dices} onClick={() => go(rotation)}>
-              Gira la ruota
-            </Button>
-          </BottomBar>
-        </>
-      )}
-
-      {spinning && (
-        <p className="mt-8 animate-pulse text-center text-title-3 text-label-2" aria-live="polite">
-          Gira, gira…
-        </p>
-      )}
-
-      {spin?.done && spinSession && (
-        <>
-          <div className="mt-6">
-            <ResultCard session={spinSession} state={state} fresh />
-          </div>
-          <BottomBar>
-            <Button size="lg" className="w-full" icon={Check} onClick={() => setMode("home")}>
-              Fatto
-            </Button>
-          </BottomBar>
-        </>
-      )}
-      {spin?.done && !spinSession && (
-        <ContentUnavailable
-          icon={Undo2}
-          title="Estrazione annullata"
-          description="Non conta nei saldi."
-          action={
-            <Button icon={Dices} onClick={() => setSpin(null)}>
-              Gira di nuovo
-            </Button>
-          }
-        />
-      )}
-    </>
-  );
 }
 
 function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
@@ -315,13 +352,19 @@ function PersonBubble({ friend, on, onToggle }: { friend: Friend; on: boolean; o
         </span>
         <span
           className="absolute bottom-0 right-0 flex size-6 items-center justify-center rounded-full bg-accent text-on-accent ring-[2.5px] ring-[var(--bg)] transition-[transform,opacity] duration-300"
-          style={{ transform: on ? "scale(1)" : "scale(0.4)", opacity: on ? 1 : 0, transitionTimingFunction: "cubic-bezier(0.3, 1.6, 0.5, 1)" }}
+          style={{
+            transform: on ? "scale(1)" : "scale(0.4)",
+            opacity: on ? 1 : 0,
+            transitionTimingFunction: "cubic-bezier(0.3, 1.6, 0.5, 1)",
+          }}
           aria-hidden
         >
           <Check className="size-3.5" strokeWidth={3.4} />
         </span>
       </span>
-      <span className={`max-w-full truncate text-subhead font-semibold transition-colors ${on ? "text-label" : "text-label-3"}`}>{friend.name}</span>
+      <span className={`max-w-full truncate text-subhead font-semibold transition-colors ${on ? "text-label" : "text-label-3"}`}>
+        {friend.name}
+      </span>
     </button>
   );
 }
@@ -344,7 +387,8 @@ function OddsSection({
       footer={
         <>
           <Car className="inline size-3.5 -translate-y-px text-blue" aria-hidden /> chi ha portato la macchina,{" "}
-          <CakeSlice className="inline size-3.5 -translate-y-px text-orange" aria-hidden /> chi prende un extra. Il saldo è caffè bevuti meno caffè pagati.
+          <CakeSlice className="inline size-3.5 -translate-y-px text-orange" aria-hidden /> chi prende un extra. Il saldo è caffè bevuti
+          meno caffè pagati.
         </>
       }
     >
@@ -387,7 +431,10 @@ function OddsSection({
             }
           >
             <div className="-mt-1.5 mb-2.5 ml-[64px] mr-4 h-[3px] overflow-hidden rounded-full bg-fill" aria-hidden>
-              <div className="h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${(o.p / max) * 100}%`, background: f.color }} />
+              <div
+                className="h-full rounded-full transition-[width] duration-500 ease-out"
+                style={{ width: `${(o.p / max) * 100}%`, background: f.color }}
+              />
             </div>
           </ListRow>
         );

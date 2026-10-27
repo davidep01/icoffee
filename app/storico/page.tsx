@@ -2,11 +2,12 @@
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { ChevronRight, Dices, History } from "lucide-react";
+import { ChevronRight, Dices, History, PenLine, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
-import { EditSessionSheet } from "@/components/EditSessionSheet";
+import { SessionSheet } from "@/components/SessionSheet";
 import { deleteSessionWithUndo } from "@/components/sessionActions";
+import { IconButton } from "@/components/ui/Button";
 import { ContentUnavailable } from "@/components/ui/ContentUnavailable";
 import { Glass } from "@/components/ui/Glass";
 import { ListSection } from "@/components/ui/List";
@@ -15,7 +16,17 @@ import { clock, percent, sameDay } from "@/lib/format";
 import type { Session, State } from "@/lib/types";
 
 export default function StoricoPage() {
-  return <AppShell title="Storico">{(state) => <Storico state={state} />}</AppShell>;
+  const [adding, setAdding] = useState(false);
+  return (
+    <AppShell title="Storico" trailing={<IconButton icon={Plus} label="Inserisci un pagamento a mano" onClick={() => setAdding(true)} />}>
+      {(state) => (
+        <>
+          <Storico state={state} onAdd={() => setAdding(true)} />
+          {adding && <SessionSheet state={state} onClose={() => setAdding(false)} />}
+        </>
+      )}
+    </AppShell>
+  );
 }
 
 const weekday = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
@@ -29,7 +40,7 @@ function dayLabel(d: Date, now: Date): string {
   return d.getFullYear() === now.getFullYear() ? weekday.format(d) : withYear.format(d);
 }
 
-function Storico({ state }: { state: State }) {
+function Storico({ state, onAdd }: { state: State; onAdd: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const byId = new Map(state.friends.map((f) => [f.id, f]));
   const current = editing ? state.sessions.find((s) => s.id === editing) : undefined;
@@ -48,9 +59,14 @@ function Storico({ state }: { state: State }) {
         title="Nessuna estrazione"
         description="Ogni giro della ruota comparirà qui, con chi c'era, chi ha guidato e gli extra."
         action={
-          <Link href="/" className="glass-button inline-flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-headline text-on-accent">
-            <Dices className="size-5" aria-hidden /> Gira la ruota
-          </Link>
+          <div className="flex flex-col items-center gap-2">
+            <Link href="/" className="glass-button inline-flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-headline text-on-accent">
+              <Dices className="size-5" aria-hidden /> Gira la ruota
+            </Link>
+            <button onClick={onAdd} className="inline-flex h-11 items-center gap-1.5 px-3 text-body text-accent">
+              <PenLine className="size-4" aria-hidden /> Inserisci a mano
+            </button>
+          </div>
         }
       />
     );
@@ -89,7 +105,13 @@ function Storico({ state }: { state: State }) {
                     </div>
                     <div className="flex shrink-0 flex-col items-end">
                       <span className="text-subhead text-label-2">{clock(s.date)}</span>
-                      <span className="font-rounded text-caption text-label-3">{percent(s.odds[s.payerId] ?? 0)}</span>
+                      {s.manual ? (
+                        <span className="inline-flex items-center gap-0.5 text-caption text-label-3">
+                          <PenLine className="size-3" aria-hidden /> a mano
+                        </span>
+                      ) : (
+                        <span className="font-rounded text-caption text-label-3">{percent(s.odds[s.payerId] ?? 0)}</span>
+                      )}
                     </div>
                     <ChevronRight className="-mr-1 size-5 shrink-0 text-label-3" strokeWidth={2.4} aria-hidden />
                   </button>
@@ -99,9 +121,9 @@ function Storico({ state }: { state: State }) {
           })}
         </ListSection>
       ))}
-      <p className="px-4 pt-4 text-center text-footnote text-label-3">Tocca per correggere, scorri a sinistra per eliminare.</p>
+      <p className="px-4 pt-4 text-center text-footnote text-label-3">Tocca per correggere, scorri a sinistra per eliminare, + per inserire a mano.</p>
 
-      {current && <EditSessionSheet key={current.id} session={current} state={state} onClose={() => setEditing(null)} />}
+      {current && <SessionSheet key={current.id} session={current} state={state} onClose={() => setEditing(null)} />}
     </>
   );
 }

@@ -11,7 +11,8 @@ export function deleteSessionWithUndo(session: Session) {
 
 export async function shareResult(session: Session, state: State) {
   const name = state.friends.find((f) => f.id === session.payerId)?.name ?? "?";
-  const text = `☕ Oggi offre ${name}! (aveva il ${percent(session.odds[session.payerId] ?? 0)} di probabilità) — iPagato`;
+  const odds = session.manual ? "" : ` (aveva il ${percent(session.odds[session.payerId] ?? 0)} di probabilità)`;
+  const text = `☕ Oggi offre ${name}!${odds} — iPagato`;
   try {
     if (navigator.share) {
       await navigator.share({ text });

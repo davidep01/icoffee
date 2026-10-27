@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Pencil, Share, Undo2, type LucideIcon } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
-import { EditSessionSheet } from "@/components/EditSessionSheet";
+import { SessionSheet } from "@/components/SessionSheet";
 import { deleteSessionWithUndo, shareResult } from "@/components/sessionActions";
 import { Glass } from "@/components/ui/Glass";
 import { ListRow, ListSection } from "@/components/ui/List";
@@ -36,8 +36,14 @@ export function ResultCard({ session, state, fresh = false }: { session: Session
         <h2 className="relative text-[40px] font-bold leading-[46px] tracking-[-0.02em]">{payer.name}</h2>
         <p className="relative mt-1 text-subhead text-label-2">
           {session.present.length} caffè
-          {session.extras.length > 0 && ` + ${session.extras.length} extra`} · aveva il{" "}
-          <span className="font-rounded font-semibold text-label">{percent(session.odds[payer.id] ?? 0)}</span>
+          {session.extras.length > 0 && ` + ${session.extras.length} extra`} ·{" "}
+          {session.manual ? (
+            "inserito a mano"
+          ) : (
+            <>
+              aveva il <span className="font-rounded font-semibold text-label">{percent(session.odds[payer.id] ?? 0)}</span>
+            </>
+          )}
         </p>
 
         <div className="relative mt-6 grid grid-cols-3 gap-2">
@@ -69,7 +75,7 @@ export function ResultCard({ session, state, fresh = false }: { session: Session
         })}
       </ListSection>
 
-      {editing && <EditSessionSheet session={session} state={state} onClose={() => setEditing(false)} />}
+      {editing && <SessionSheet session={session} state={state} onClose={() => setEditing(false)} />}
     </div>
   );
 }
